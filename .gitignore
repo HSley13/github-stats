@@ -134,3 +134,8 @@ dmypy.json
 
 # PyCharm project files
 .idea
+
+# graphify & Claude artifacts
+graphify-out/
+.claude/
+CLAUDE.md
