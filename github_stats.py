@@ -198,6 +198,31 @@ class Queries(object):
 """
 
     @staticmethod
+    def repos_info(repos: List[Tuple[str, str]]) -> str:
+        """
+        :param repos: list of (owner, name) pairs to query
+        :return: GraphQL query with display info for each repository
+        """
+        parts = [
+            f"""
+  repo{i}: repository(owner: "{owner}", name: "{name}") {{
+    nameWithOwner
+    description
+    url
+    stargazerCount
+    forkCount
+    primaryLanguage {{
+      name
+      color
+    }}
+  }}"""
+            for i, (owner, name) in enumerate(repos)
+        ]
+        return f"""query {{{"".join(parts)}
+}}
+"""
+
+    @staticmethod
     def contrib_years() -> str:
         """
         :return: GraphQL query to get all years the user has been a contributor

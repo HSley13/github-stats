@@ -1,12 +1,15 @@
 #!/usr/bin/python3
 
 import asyncio
+import glob
+import html
 import os
 import re
+from typing import List, Tuple
 
 import aiohttp
 
-from github_stats import Stats
+from github_stats import Queries, Stats
 
 
 ################################################################################
@@ -20,6 +23,32 @@ def generate_output_folder() -> None:
     """
     if not os.path.isdir("generated"):
         os.mkdir("generated")
+
+
+def read_pinned_repos(user: str) -> List[Tuple[str, str]]:
+    """
+    Read the list of repositories to generate pin cards for
+    :param user: default owner for entries written without an owner
+    :return: list of (owner, name) pairs
+    """
+    if not os.path.isfile("pinned_repos.txt"):
+        return []
+    repos = []
+    with open("pinned_repos.txt", "r") as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            owner, _, name = line.rpartition("/")
+            owner = owner or user
+            if not re.fullmatch(r"[\w.-]+", owner) or not re.fullmatch(r"[\w.-]+", name):
+                print(f"Skipping invalid entry in pinned_repos.txt: {line}")
+                continue
+            if (owner.lower(), name.lower()) not in {
+                (o.lower(), n.lower()) for o, n in repos
+            }:
+                repos.append((owner, name))
+    return repos
 
 
 ################################################################################
@@ -90,6 +119,74 @@ fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8z"></path></svg>
         f.write(output)
 
 
+async def generate_pins(queries: Queries, user: str) -> None:
+    """
+    Generate an SVG card for each repository listed in pinned_repos.txt, plus
+    a Markdown snippet linking every card to its repository
+    :param queries: object used to query the GitHub API
+    :param user: default owner for entries written without an owner
+    """
+    repos = read_pinned_repos(user)
+
+    generate_output_folder()
+    if not os.path.isdir("generated/pins"):
+        os.mkdir("generated/pins")
+    # Remove cards for repositories no longer in the list
+    for path in glob.glob("generated/pins/*.svg"):
+        os.remove(path)
+    if not repos:
+        return
+
+    with open("templates/pin.svg", "r") as f:
+        template = f.read()
+
+    result = await queries.query(Queries.repos_info(repos))
+    data = result.get("data") or {}
+    for error in result.get("errors", []):
+        print(f"Pinned repo error: {error.get('message')}")
+
+    stats_repo = os.getenv("GITHUB_REPOSITORY", f"{user}/github-stats")
+    snippet = ""
+    for i, (owner, name) in enumerate(repos):
+        repo = data.get(f"repo{i}")
+        if repo is None:
+            print(f"Skipping {owner}/{name}: repository not found")
+            continue
+
+        language = repo.get("primaryLanguage")
+        language_html = ""
+        if language is not None:
+            color = language.get("color") or "#000000"
+            language_html = (
+                f'<span><span class="dot" style="background-color: {color};">'
+                f"</span>{html.escape(language['name'])}</span>"
+            )
+        description = repo.get("description") or "No description provided."
+        display_name = name if owner.lower() == user.lower() else f"{owner}/{name}"
+
+        output = re.sub("{{ name }}", lambda _: html.escape(display_name), template)
+        output = re.sub(
+            "{{ description }}", lambda _: html.escape(description), output
+        )
+        output = re.sub("{{ language }}", lambda _: language_html, output)
+        output = re.sub("{{ stars }}", f"{repo['stargazerCount']:,}", output)
+        output = re.sub("{{ forks }}", f"{repo['forkCount']:,}", output)
+
+        file_name = f"{owner}-{name}.svg"
+        with open(f"generated/pins/{file_name}", "w") as f:
+            f.write(output)
+
+        image = f"https://github.com/{stats_repo}/blob/master/generated/pins/{file_name}"
+        snippet += (
+            f'<a href="{repo["url"]}">'
+            f'<img src="{image}#gh-dark-mode-only" />'
+            f'<img src="{image}#gh-light-mode-only" /></a>\n'
+        )
+
+    with open("generated/pins.md", "w") as f:
+        f.write(snippet)
+
+
 ################################################################################
 # Main Function
 ################################################################################
@@ -129,7 +226,11 @@ async def main() -> None:
             exclude_langs=excluded_langs,
             ignore_forked_repos=ignore_forked_repos,
         )
-        await asyncio.gather(generate_languages(s), generate_overview(s))
+        await asyncio.gather(
+            generate_languages(s),
+            generate_overview(s),
+            generate_pins(s.queries, user),
+        )
 
 
 if __name__ == "__main__":
