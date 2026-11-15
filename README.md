@@ -119,6 +119,12 @@ For more information on inaccuracies, see issue
    ![](https://raw.githubusercontent.com/username/github-stats/master/generated/languages.svg#gh-dark-mode-only)
    ![](https://raw.githubusercontent.com/username/github-stats/master/generated/languages.svg#gh-light-mode-only)
    ```
+   - To show more repositories than GitHub's six pins, list them in
+     [`pinned_repos.txt`](pinned_repos.txt) (one per line; `repo-name` for
+     your own repos or `owner/repo-name` for anyone else's). After the
+     workflow runs, a card for each one is in `generated/pins/`, and
+     `generated/pins.md` has the HTML to paste into your profile README, with
+     every card linking to its repository.
 9. Link back to this repository so that others can generate their own
    statistics images.
 10. Star this repo if you like it!

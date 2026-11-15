@@ -1,0 +1,5 @@
+# Repositories to generate pin cards for (one per line).
+# Write "repo-name" for your own repos, or "owner/repo-name" for anyone else's.
+# Cards are written to generated/pins/, and generated/pins.md has the
+# ready-to-paste HTML for your profile README.
+github-stats
